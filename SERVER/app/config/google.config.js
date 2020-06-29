@@ -1,10 +1,5 @@
 const GoogleMap = require('google-distance-matrix');
-const env = require('./google.env.js');
 
-const google = new GoogleMap.S3({
-    accessKeyId: env.AWS_ACCESS_KEY,
-    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-    region: env.REGION
-});
+const apiKey = GoogleMap.key(process.env.REACT_APP_MAPS_ID);
 
-module.exports = google;
+module.exports = apiKey;
