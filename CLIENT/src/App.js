@@ -1,6 +1,8 @@
 import './App.css';
 import React from 'react';
 import { PageHeader, Card, Row, Col, Button, Divider, Radio, Statistic, Timeline, Switch } from "antd";
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faBiking, faCar, faWalking } from '@fortawesome/free-solid-svg-icons'
 import { GoogleApiWrapper, Marker, Map, Polygon } from 'google-maps-react';
 import branchAndBound from './tspBranchAndBound'
 const Queries = require('./Queries')
@@ -60,54 +62,58 @@ export class App extends React.Component {
 
   async gooogleMapsDistanceMatrix(stgLatLng) {
     //This function responds with a distances matrix between inserted markers 
-    let response = await Queries.getMatrixDistance(this.state.travelMode, stgLatLng)
-    if (response) {
-      if (response.data.status === 'OK') {
-        //Declare emptys matrices
-        let matrixDistance = [];
-        let matrixDuration = [];
-        for (let i = 0; i < stgLatLng.length; i++) {
-          matrixDistance[i] = new Array(stgLatLng.length);
-          matrixDuration[i] = new Array(stgLatLng.length);
-        }
-        //Get elements from response an copy then to appropriate matrix
-        for (let i = 0; i < stgLatLng.length; i++) {
-          for (let j = 0; j < stgLatLng.length; j++) {
-            if (response.data.rows[0].elements[j].status == 'OK' && response.data.rows[i].elements[j].distance != undefined) {
-              let distance = response.data.rows[i].elements[j].distance.value;
-              let duration = response.data.rows[i].elements[j].duration.value;
-              if (distance == 0 || duration == 0) {
-                matrixDistance[i][j] = Infinity;
-                matrixDuration[i][j] = Infinity;
+    let response = await Queries.getMatrixDistance(this.state.travelMode, stgLatLng).then((response) => {
+      console.log(response)
+      if (response) {
+        if (response.data.status === 'OK') {
+          //Declare emptys matrices
+          let matrixDistance = [];
+          let matrixDuration = [];
+          for (let i = 0; i < stgLatLng.length; i++) {
+            matrixDistance[i] = new Array(stgLatLng.length);
+            matrixDuration[i] = new Array(stgLatLng.length);
+          }
+          //Get elements from response an copy then to appropriate matrix
+          for (let i = 0; i < stgLatLng.length; i++) {
+            for (let j = 0; j < stgLatLng.length; j++) {
+              if (response.data.rows[0].elements[j].status == 'OK' && response.data.rows[i].elements[j].distance != undefined) {
+                let distance = response.data.rows[i].elements[j].distance.value;
+                let duration = response.data.rows[i].elements[j].duration.value;
+                if (distance == 0 || duration == 0) {
+                  matrixDistance[i][j] = Infinity;
+                  matrixDuration[i][j] = Infinity;
+                } else {
+                  matrixDistance[i][j] = distance;
+                  matrixDuration[i][j] = duration;
+                }
               } else {
-                matrixDistance[i][j] = distance;
-                matrixDuration[i][j] = duration;
+                return ({
+                  status: false,
+                  erro: 'Não há rotas para alguma das localizações'
+                })
               }
-            } else {
-              return ({
-                status: false,
-                erro: 'Não há rotas para alguma das localizações'
-              })
             }
           }
+          //Return of Promisse
+          return ({
+            status: true,
+            matrixDistance, matrixDuration
+          })
+        } else {
+          return ({
+            status: false,
+            erro: 'Ocorreu um erro'
+          })
         }
-        //Return of Promisse
-        return ({
-          status: true,
-          matrixDistance, matrixDuration
-        })
       } else {
         return ({
           status: false,
-          erro: 'Ocorreu um erro'
+          erro: 'Error'
         })
       }
-    } else {
-      return ({
-        status: false,
-        erro: 'Error'
-      })
-    }
+    })
+
+    return response
 
   }
 
@@ -272,7 +278,7 @@ export class App extends React.Component {
       directionsDisplay.setMap(null)
 
     } else {
-      if (this.state.route.length > 0) {        
+      if (this.state.route.length > 0) {
         directionsDisplay.setMap(mapGoogle)
       }
       this.setState({ showRoute: true })
@@ -299,73 +305,70 @@ export class App extends React.Component {
   render() {
     return (
       <div>
-        <Row gutter={[1000, 12]}>
-          <Col className="gutter-row" span={24}>
+        <Row >
+          <Col span={24}>
             <PageHeader title="Caixeiro Viajante Branch and Bound" subTitle="CIC111" />
           </Col>
-          <Col className="gutter-row" span={24}>
-            <div style={{ width: 500, height: 500 }}>
-              <Map
-                google={this.props.google}
-                className={'map-canvas'}
-                zoom={10}
-                initialCenter={{
-                  lat: -22.4097429,
-                  lng: -45.4613914
-                }}
-                streetViewControl={false}
-                mapTypeControl={false}
-                onClick={(t, map, coord) => this.insertMaker(coord)}
-                onReady={(mapProps, map) => this.startMaps(mapProps, map)}
-              >
-                {this.state.showPolygon ?
-                  <Polygon
-                    paths={this.state.route}
-                    strokeColor="#FF0000"
-                    strokeOpacity={1}
-                    strokeWeight={2}
-                    fillOpacity={0} />
-                  : null}
-                {this.state.markers.map((marker, index) => (
-                  <Marker
-                    key={index}
-                    label={index.toString()}
-                    title={marker.title}
-                    name={marker.name}
-                    position={marker.position}
+          <Col span={24} style={{ height: '50vh' }}>
+            <Map
+              google={this.props.google}
+              zoom={10}
+              initialCenter={{
+                lat: -22.4097429,
+                lng: -45.4613914
+              }}
+              streetViewControl={false}
+              mapTypeControl={false}
+              onClick={(t, map, coord) => this.insertMaker(coord)}
+              onReady={(mapProps, map) => this.startMaps(mapProps, map)}
+            >
+              {this.state.showPolygon ?
+                <Polygon
+                  paths={this.state.route}
+                  strokeColor="#FF0000"
+                  strokeOpacity={1}
+                  strokeWeight={2}
+                  fillOpacity={0} />
+                : null}
+              {this.state.markers.map((marker, index) => (
+                <Marker
+                  key={index}
+                  label={index.toString()}
+                  title={marker.title}
+                  name={marker.name}
+                  position={marker.position}
 
-                  >
-                  </Marker>
-                ))}
-              </Map>
-            </div>
+                >
+                </Marker>
+              ))}
+            </Map>
           </Col>
         </Row>
-        <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 32 }} style={{ paddingLeft: '5%', paddingRight: '5%', paddingTop: '1%', paddingBottom: '1%' }}>
-          <Col className="gutter-row" span={8} >
+        <Row style={{ paddingLeft: '5%', paddingRight: '5%', paddingTop: '1%', paddingBottom: '1%' }}>
+          <Col span={8} >
             <Statistic title="Número de Cidades" value={this.state.stgLatLng.length > 0 ? this.state.stgLatLng.length : 0} />
           </Col>
-          <Col className="gutter-row" span={8}>
+          <Col span={8}>
             <Statistic title="Duração" value={this.state.costDur ? this.state.costDur : 'Não calculada'} />
           </Col>
-          <Col className="gutter-row" span={8}>
+          <Col span={8}>
             <Statistic title="Distância" value={this.state.costDist ? this.state.costDist : 'Não calculada'} />
           </Col>
         </Row>
         <Divider orientation="left" style={{ color: '#333', fontWeight: 'normal' }} />
-        <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 32 }} style={{ paddingLeft: '5%', paddingRight: '5%' }}>
-          <Col className="gutter-row" span={10}>
-            <Button onClick={() => this.start('distance')} type="primary" loading={this.state.loadingStart}>Calcular pela Distância Mínima</Button>
+        <Row style={{ paddingLeft: '5%', paddingRight: '5%', paddingTop: '1%', paddingBottom: '1%' }}>
+          <Col span={10}>
+            <Button onClick={() => this.start('distance')} type="primary" loading={this.state.loadingStart}>Distância Mínima</Button>
           </Col>
-          <Col className="gutter-row" span={10}>
-            <Button onClick={() => this.start('duration')} type="primary" loading={this.state.loadingStart}>Calcular pela Duração Mínima</Button>
+          <Col span={10}>
+            <Button onClick={() => this.start('duration')} type="primary" loading={this.state.loadingStart}>Duração Mínima</Button>
           </Col>
-          <Col className="gutter-row" span={4}>
+          <Col span={4}>
             <Button onClick={() => this.clear()}>Limpar</Button>
           </Col>
         </Row>
         <Divider orientation="left" style={{ color: '#333', fontWeight: 'normal' }} />
-        <Row gutter={{ xs: 8, sm: 16, md: 24, lg: 32 }} style={{ paddingLeft: '5%', paddingRight: '5%', paddingTop: '1%', paddingBottom: '1%' }}>
+        <Row style={{ paddingLeft: '5%', paddingRight: '5%', paddingTop: '1%', paddingBottom: '1%' }}>
           <Col className="configuracoes" span={12}>
             <Card title="Configurações" >
               <Row gutter={[16, 24]}>
@@ -380,9 +383,9 @@ export class App extends React.Component {
               </Row><Row gutter={[16, 24]}>
                 <Col className="travelmode" span={12}>
                   <Radio.Group onChange={(e) => this.travelMode(e.target.value)} defaultValue={'DRIVING'}>
-                    <Radio value={'DRIVING'} style={{ display: 'block', lineHeight: '30px' }}>Dirigindo</Radio>
-                    <Radio value={'BICYCLING'} style={{ display: 'block', lineHeight: '30px' }}>Pedalando</Radio>
-                    <Radio value={'WALKING'} style={{ display: 'block', lineHeight: '30px' }}>Andando</Radio>
+                    <Radio value={'DRIVING'} style={{ display: 'block', lineHeight: '30px' }}><FontAwesomeIcon icon={faCar} /> Dirigindo</Radio>
+                    <Radio value={'BICYCLING'} style={{ display: 'block', lineHeight: '30px' }}><FontAwesomeIcon icon={faBiking} /> Pedalando</Radio>
+                    <Radio value={'WALKING'} style={{ display: 'block', lineHeight: '30px' }}><FontAwesomeIcon icon={faWalking} /> Andando</Radio>
                   </Radio.Group>
                 </Col>
               </Row>
