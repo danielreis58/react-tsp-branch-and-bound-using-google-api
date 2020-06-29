@@ -279,7 +279,7 @@ export class App extends React.Component {
   }
 
   componentDidMount() {
-    GoogleMap.key('AIzaSyBAx3vcESpV-5Zr_pZUlUVMX-yzkDt6nWI')
+    GoogleMap.key(process.env.REACT_APP_MAPS_ID)
   }
 
   render() {
