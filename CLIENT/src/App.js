@@ -1,9 +1,10 @@
 import './App.css';
-import React, { cloneElement } from 'react';
-import { Layout, Descriptions, PageHeader, Card, Row, Col, Button, Divider, Alert, Radio, Statistic, Timeline, Switch } from "antd";
-import { GoogleApiWrapper, InfoWindow, Marker, Map, withGoogleMap, withScriptjs, Polyline, Polygon } from 'google-maps-react';
-import GoogleMap, { matrix } from 'google-distance-matrix';
+import React from 'react';
+import { PageHeader, Card, Row, Col, Button, Divider, Radio, Statistic, Timeline, Switch } from "antd";
+import { GoogleApiWrapper, Marker, Map, Polygon } from 'google-maps-react';
 import branchAndBound from './tspBranchAndBound'
+const Queries = require('./Queries')
+
 
 const cityLimit = 10
 
@@ -45,6 +46,7 @@ export class App extends React.Component {
     this.setState({ arrayMinRoute: [] })
     this.setState({ route: [] })
     directionsDisplay.setMap(null);
+    directionsDisplay.setDirections(null);
   }
 
   clearBeforeStart() {
@@ -56,51 +58,60 @@ export class App extends React.Component {
 
   }
 
-  gooogleMapsDistanceMatrix = (stgLatLng) => new Promise((resolve, reject) => {
+  async gooogleMapsDistanceMatrix(stgLatLng) {
     //This function responds with a distances matrix between inserted markers 
-    GoogleMap.matrix(stgLatLng, stgLatLng, function (err, response) {
-      if (!err) {
-        if (response.status == 'OK') {
-          //Declare emptys matrices
-          let matrixDistance = [];
-          let matrixDuration = [];
-          for (let i = 0; i < stgLatLng.length; i++) {
-            matrixDistance[i] = new Array(stgLatLng.length);
-            matrixDuration[i] = new Array(stgLatLng.length);
-          }
-
-          //Get elements from response an copy then to appropriate matrix
-          for (let i = 0; i < stgLatLng.length; i++) {
-            for (let j = 0; j < stgLatLng.length; j++) {
-              if (response.rows[0].elements[j].status == 'OK' && response.rows[i].elements[j].distance != undefined) {
-                let distance = response.rows[i].elements[j].distance.value;
-                let duration = response.rows[i].elements[j].duration.value;
-                if (distance == 0 || duration == 0) {
-                  matrixDistance[i][j] = Infinity;
-                  matrixDuration[i][j] = Infinity;
-                } else {
-                  matrixDistance[i][j] = distance;
-                  matrixDuration[i][j] = duration;
-                }
+    let response = await Queries.getMatrixDistance(this.state.travelMode, stgLatLng)
+    if (response) {
+      if (response.data.status === 'OK') {
+        //Declare emptys matrices
+        let matrixDistance = [];
+        let matrixDuration = [];
+        for (let i = 0; i < stgLatLng.length; i++) {
+          matrixDistance[i] = new Array(stgLatLng.length);
+          matrixDuration[i] = new Array(stgLatLng.length);
+        }
+        //Get elements from response an copy then to appropriate matrix
+        for (let i = 0; i < stgLatLng.length; i++) {
+          for (let j = 0; j < stgLatLng.length; j++) {
+            if (response.data.rows[0].elements[j].status == 'OK' && response.data.rows[i].elements[j].distance != undefined) {
+              let distance = response.data.rows[i].elements[j].distance.value;
+              let duration = response.data.rows[i].elements[j].duration.value;
+              if (distance == 0 || duration == 0) {
+                matrixDistance[i][j] = Infinity;
+                matrixDuration[i][j] = Infinity;
               } else {
-                reject('Não há rotas para alguma das localizações')
+                matrixDistance[i][j] = distance;
+                matrixDuration[i][j] = duration;
               }
+            } else {
+              return ({
+                status: false,
+                erro: 'Não há rotas para alguma das localizações'
+              })
             }
           }
-
-          //Return of Promisse
-          resolve({ matrixDistance, matrixDuration })
-        } else {
-          reject('Ocorreu um erro')
         }
+        //Return of Promisse
+        return ({
+          status: true,
+          matrixDistance, matrixDuration
+        })
       } else {
-        console.log(err);
-        reject('Error', err)
+        return ({
+          status: false,
+          erro: 'Ocorreu um erro'
+        })
       }
-    })
-  })
+    } else {
+      return ({
+        status: false,
+        erro: 'Error'
+      })
+    }
 
-  insertMaker(t, map, coord) {
+  }
+
+  insertMaker(coord) {
     //Clean the map if user aready calculate a route previously
     if (this.state.arrayMinRoute.length > 0) {
       this.clear()
@@ -159,97 +170,99 @@ export class App extends React.Component {
 
     //Get MatrixDistance and Duration
     this.gooogleMapsDistanceMatrix(this.state.stgLatLng).then(async (response) => {
-      await this.setState({ matrixDist: response.matrixDistance })
-      await this.setState({ matrixDur: response.matrixDuration })
+      if (response.status) {
+        this.setState({ matrixDist: response.matrixDistance })
+        this.setState({ matrixDur: response.matrixDuration })
 
-      if (method === 'distance') {
-        //CALL ALGORITHM BRANCH AND BOUND return min path and lowest cost(meters)
-        let arrayMinRoute = branchAndBound.tspBranchAndBound(this.state.matrixDist)
-        this.setState({ arrayMinRoute: arrayMinRoute })
-        this.setState({ costDist: `${arrayMinRoute[arrayMinRoute.length - 1].cost / 1000} km` })
-
-      } else {
-        //CALL ALGORITHM BRANCH AND BOUND return min path and lowest cost (seconds)
-        let arrayMinRoute = branchAndBound.tspBranchAndBound(this.state.matrixDur)
-        this.setState({ arrayMinRoute: arrayMinRoute })
-        //Pretty formmatter before set Cost
-        let seconds = arrayMinRoute[arrayMinRoute.length - 1].cost
-        let h = Math.floor(seconds / 3600);
-        let m = Math.floor(seconds % 3600 / 60);
-        this.setState({ costDur: `${h} Horas ${m} minutos` })
-      }
-
-      //console.log('Rota TSP Branch and Bound', this.state.arrayMinRoute)
-
-      //Make the match get index off min travel and search on matrix o boj lat lng
-      await this.state.arrayMinRoute.map((obj) => {
-        let index = obj.index
-        this.setState(previousState => {
-          return {
-            route: [
-              ...previousState.route, this.state.objLatLng[index]
-            ]
-          };
-        });
-      })
-
-      let waypts = [];
-      for (let i = 0; i < this.state.route.length; i++) {
-        waypts.push({
-          location: this.state.route[i],
-          stopover: false
-        });
-      }
-
-      if (this.state.showRoute) {
-        directionsDisplay.setMap(mapGoogle)
-      }
-
-
-      let request = {
-        origin: this.state.route[0],
-        destination: this.state.route[0],
-        waypoints: waypts,
-        travelMode: this.state.travelMode === 'DRIVING' ? google.maps.TravelMode.DRIVING :
-          this.state.travelMode === 'BICYCLING' ? google.maps.TravelMode.BICYCLING :
-            this.state.travelMode === 'WALKING' ? google.maps.TravelMode.WALKING :
-              google.maps.TravelMode.DRIVING
-        ,
-        avoidTolls: false
-      };
-
-
-      new Promise((resolve, reject) => {
-        directionsService.route(request, function (response, status) {
-          if (status == google.maps.DirectionsStatus.OK) {
-            directionsDisplay.setDirections(response);
-
-            let costDist = 0
-            let costDur = 0
-            for (let i = 0; i < response.routes[0].legs.length; i++) {
-              costDist += response.routes[0].legs[i].distance.value;
-              costDur += response.routes[0].legs[i].duration.value;
-            }
-            resolve({ costDist, costDur })
-          }
-        });
-      }).then((response) => {
         if (method === 'distance') {
-          let d = response.costDur
-          let h = Math.floor(d / 3600);
-          let m = Math.floor(d % 3600 / 60);
-          this.setState({ costDur: `${h} Horas ${m} minutos*` })
-        } else {
-          this.setState({ costDist: `${response.costDist / 1000} km*` })
-        }
-        this.setState({ loadingStart: false })
-      })
+          //CALL ALGORITHM BRANCH AND BOUND return min path and lowest cost(meters)
+          let arrayMinRoute = branchAndBound.tspBranchAndBound(this.state.matrixDist)
+          this.setState({ arrayMinRoute: arrayMinRoute })
+          this.setState({ costDist: `${arrayMinRoute[arrayMinRoute.length - 1].cost / 1000} km` })
 
-    }).catch((erro) => {
-      alert(erro);
-      this.setState({ loadingStart: false })
-      this.clear()
-    });
+        } else {
+          //CALL ALGORITHM BRANCH AND BOUND return min path and lowest cost (seconds)
+          let arrayMinRoute = branchAndBound.tspBranchAndBound(this.state.matrixDur)
+          this.setState({ arrayMinRoute: arrayMinRoute })
+          //Pretty formmatter before set Cost
+          let seconds = arrayMinRoute[arrayMinRoute.length - 1].cost
+          let h = Math.floor(seconds / 3600);
+          let m = Math.floor(seconds % 3600 / 60);
+          this.setState({ costDur: `${h} Horas ${m} minutos` })
+        }
+
+        //console.log('Rota TSP Branch and Bound', this.state.arrayMinRoute)
+
+        //Make the match get index off min travel and search on matrix o boj lat lng
+        this.state.arrayMinRoute.map((obj) => {
+          let index = obj.index;
+          this.setState(previousState => {
+            return {
+              route: [
+                ...previousState.route, this.state.objLatLng[index]
+              ]
+            };
+          });
+        })
+
+        let waypts = [];
+        for (let i = 0; i < this.state.route.length; i++) {
+          waypts.push({
+            location: this.state.route[i],
+            stopover: false
+          });
+        }
+
+        if (this.state.showRoute) {
+          directionsDisplay.setMap(mapGoogle)
+        }
+
+
+        let request = {
+          origin: this.state.route[0],
+          destination: this.state.route[0],
+          waypoints: waypts,
+          travelMode: this.state.travelMode === 'DRIVING' ? google.maps.TravelMode.DRIVING :
+            this.state.travelMode === 'BICYCLING' ? google.maps.TravelMode.BICYCLING :
+              this.state.travelMode === 'WALKING' ? google.maps.TravelMode.WALKING :
+                google.maps.TravelMode.DRIVING
+          ,
+          avoidTolls: false
+        };
+
+        new Promise((resolve) => {
+          directionsService.route(request, function (response, status) {
+            if (status == google.maps.DirectionsStatus.OK) {
+              directionsDisplay.setDirections(response);
+
+              let costDist = 0
+              let costDur = 0
+              for (let i = 0; i < response.routes[0].legs.length; i++) {
+                costDist += response.routes[0].legs[i].distance.value;
+                costDur += response.routes[0].legs[i].duration.value;
+              }
+              resolve({ costDist, costDur })
+            }
+          });
+        }).then((response) => {
+          if (method === 'distance') {
+            let d = response.costDur
+            let h = Math.floor(d / 3600);
+            let m = Math.floor(d % 3600 / 60);
+            this.setState({ costDur: `${h} Horas ${m} minutos*` })
+          } else {
+            this.setState({ costDist: `${response.costDist / 1000} km*` })
+          }
+
+          this.setState({ loadingStart: false })
+        })
+      } else {
+        alert(response.erro);
+        this.setState({ loadingStart: false })
+        this.clear()
+      }
+
+    })
 
   }
 
@@ -259,13 +272,15 @@ export class App extends React.Component {
       directionsDisplay.setMap(null)
 
     } else {
+      if (this.state.route.length > 0) {        
+        directionsDisplay.setMap(mapGoogle)
+      }
       this.setState({ showRoute: true })
-      directionsDisplay.setMap(mapGoogle)
+
     }
   }
 
   travelMode(value) {
-    GoogleMap.mode(value.toLowerCase())
     this.setState({ travelMode: value })
 
   }
@@ -279,7 +294,6 @@ export class App extends React.Component {
   }
 
   componentDidMount() {
-    GoogleMap.key(process.env.REACT_APP_MAPS_ID)
   }
 
   render() {
@@ -301,7 +315,7 @@ export class App extends React.Component {
                 }}
                 streetViewControl={false}
                 mapTypeControl={false}
-                onClick={(t, map, coord) => this.insertMaker(t, map, coord)}
+                onClick={(t, map, coord) => this.insertMaker(coord)}
                 onReady={(mapProps, map) => this.startMaps(mapProps, map)}
               >
                 {this.state.showPolygon ?
@@ -378,10 +392,10 @@ export class App extends React.Component {
             <Card title="Caminho mínimo">
               <Timeline>
                 {this.state.arrayMinRoute.map((obj) => (
-                  <Timeline.Item>{obj.index}</Timeline.Item>
+                  <Timeline.Item key={obj.index + 1}>{obj.index}</Timeline.Item>
                 ))
                 }
-                <Timeline.Item>0</Timeline.Item>
+                <Timeline.Item key={0}>0</Timeline.Item>
               </Timeline>
             </Card>
           </Col>
