@@ -199,7 +199,7 @@ export class App extends React.Component {
 
         //console.log('Rota TSP Branch and Bound', this.state.arrayMinRoute)
 
-        //Make the match get index off min travel and search on matrix o boj lat lng
+        //Make the match get index of min travel and search on matrix objlatlng
         this.state.arrayMinRoute.map((obj) => {
           let index = obj.index;
           this.setState(previousState => {
@@ -210,7 +210,7 @@ export class App extends React.Component {
             };
           });
         })
-
+        //Push the route latlag to array
         let waypts = [];
         for (let i = 0; i < this.state.route.length; i++) {
           waypts.push({
@@ -218,12 +218,12 @@ export class App extends React.Component {
             stopover: false
           });
         }
-
+        //Show route if showRoute
         if (this.state.showRoute) {
           directionsDisplay.setMap(mapGoogle)
         }
 
-
+        //Build the directionsService request, note that the waypts route latlang array is passed
         let request = {
           origin: this.state.route[0],
           destination: this.state.route[0],
@@ -235,12 +235,12 @@ export class App extends React.Component {
           ,
           avoidTolls: false
         };
-
+        //Execute Request
         new Promise((resolve) => {
           directionsService.route(request, function (response, status) {
             if (status == google.maps.DirectionsStatus.OK) {
               directionsDisplay.setDirections(response);
-
+              //Sum the cost of each part of the route
               let costDist = 0
               let costDur = 0
               for (let i = 0; i < response.routes[0].legs.length; i++) {
@@ -251,6 +251,7 @@ export class App extends React.Component {
             }
           });
         }).then((response) => {
+          //Just converting values for better display
           if (method === 'distance') {
             let d = response.costDur
             let h = Math.floor(d / 3600);
